@@ -1,0 +1,187 @@
+#!/usr/bin/env python
+
+import os
+import platform
+import subprocess
+
+Makefile_pathname = "Makefile"
+CC = "$(CC)"
+CFLAGS = "$(BUILD_FLAGS) $(CFLAGS)"
+BUILD_PREFIX = CC + " " + CFLAGS + " "
+
+template_head = r"""PREFIX = /usr
+OBJECTS_TEST_BODY = main.o argsparse.o
+OBJECTS_GENERAL = big_int.o big_int_fibonacci.o big_int_mem_pool.o \
+        big_int_prime.o big_int_rand.o
+OBJECTS_BIG_INT = $(OBJECTS_GENERAL)
+OBJECTS_TEST = $(OBJECTS_TEST_BODY) $(OBJECTS_BIG_INT)
+OBJECTS_SHARED = $(OBJECTS_BIG_INT)
+OBJECTS_STATIC = $(OBJECTS_BIG_INT)
+
+MAKE = make
+LIBS = 
+PROJECT_NAME = bigint
+TARGET_TEST_UNIX = $(PROJECT_NAME)
+TARGET_TEST_WIN32 = $(PROJECT_NAME).exe
+TARGET_SHARED_UNIX = lib$(PROJECT_NAME).so
+TARGET_SHARED_WIN32 = lib$(PROJECT_NAME).dll
+TARGET_SHARED = 
+TARGET_STATIC = lib$(PROJECT_NAME).a
+TARGET = 
+CC = gcc
+CP_UNIX = cp
+CP_WIN32 = copy
+CP = 
+STRIP = strip
+RM_UNIX = rm -f
+RM_WIN32 = rm -f
+RM = 
+MKDIR_UNIX = mkdir -p
+MKDIR_WIN32 = mkdir -p
+MKDIR = 
+RMDIR_UNIX = rmdir
+RMDIR_WIN32 = rmdir
+RMDIR = 
+LINK_FLAGS_UNIX = 
+LINK_FLAGS_WIN32 = -lmingw32 -lpsapi
+LINK_FLAGS =
+CFLAGS_UNIX = 
+CFLAGS_WIN32 = 
+CFLAGS = 
+
+DEBUG_CFLAGS = " -Wall -Wextra -g -fPIC"
+RELEASE_CFLAGS = " -Wall -Wextra -O3 -fPIC"
+
+TEST_CFLAGS = 
+
+SHARED_CFLAGS_UNIX = " -fPIC -shared"
+SHARED_CFLAGS_WIN32 = " -shared"
+SHARED_CFLAGS = 
+
+STATIC_CFLAGS_UNIX = " -fPIC"
+STATIC_CFLAGS_WIN32 = 
+STATIC_CFLAGS = 
+
+AR = ar
+AR_FLAGS = -cr
+
+ifdef SystemRoot
+    LINK_FLAGS = $(LINK_FLAGS_WIN32)
+    TARGET_TEST = $(TARGET_TEST_WIN32)
+    TARGET_SHARED = $(TARGET_SHARED_WIN32)
+    CFLAGS = $(CFLAGS_WIN32)
+    SHARED_CFLAGS = $(SHARED_CFLAGS_WIN32)
+    STATIC_CFLAGS = $(STATIC_CFLAGS_WIN32)
+    RM = $(RM_WIN32)
+    MKDIR = $(MKDIR_WIN32)
+    RMDIR = $(RMDIR_WIN32)
+    CP = $(CP_WIN32)
+    FixPath = $(subst /,\,$1)
+endif
+
+ifeq ($(shell uname), MINGW32_NT-6.1)
+    LINK_FLAGS = $(LINK_FLAGS_WIN32)
+    TARGET_TEST = $(TARGET_TEST_WIN32)
+    TARGET_SHARED = $(TARGET_SHARED_WIN32)
+    CFLAGS = $(CFLAGS_WIN32)
+    SHARED_CFLAGS = $(SHARED_CFLAGS_WIN32)
+    STATIC_CFLAGS = $(STATIC_CFLAGS_WIN32)
+    RM = $(RM_WIN32)
+    MKDIR = $(MKDIR_WIN32)
+    RMDIR = $(RMDIR_WIN32)
+    CP = $(CP_WIN32)
+    FixPath = $(subst /,\,$1)
+endif
+
+ifeq ($(shell uname), Linux)
+    LINK_FLAGS = $(LINK_FLAGS_UNIX)
+    TARGET_TEST = $(TARGET_TEST_UNIX)
+    TARGET_SHARED = $(TARGET_SHARED_UNIX)
+    CFLAGS = $(CFLAGS_UNIX)
+    SHARED_CFLAGS = $(SHARED_CFLAGS_UNIX)
+    STATIC_CFLAGS = $(STATIC_CFLAGS_UNIX)
+    RM = $(RM_UNIX)
+    MKDIR = $(MKDIR_UNIX)
+    RMDIR = $(RMDIR_UNIX)
+    CP = $(CP_UNIX)
+    FixPath = $1
+endif
+
+default : debug
+
+debug :
+	@${MAKE} targets_test BUILD_FLAGS=$(DEBUG_CFLAGS)
+
+release :
+	@${MAKE} targets_test BUILD_FLAGS=$(RELEASE_CFLAGS)
+
+shared :
+	@${MAKE} targets_shared BUILD_FLAGS=$(DEBUG_CFLAGS)$(SHARED_CFLAGS)
+
+static:
+	@${MAKE} targets_static BUILD_FLAGS=$(DEBUG_CFLAGS)$(STATIC_CFLAGS)
+
+targets_test : $(OBJECTS_TEST)
+	@$(CC) $(BUILD_FLAGS) -o $(TARGET_TEST) $(OBJECTS_TEST) $(LIBS) $(LINK_FLAGS) 
+
+targets_shared : $(OBJECTS_SHARED)
+	@$(CC) $(BUILD_FLAGS) -o $(TARGET_SHARED) $(OBJECTS_SHARED) $(LIBS) $(LINK_FLAGS) 
+
+targets_static : $(OBJECTS_STATIC)
+	@$(AR) $(AR_FLAGS) -o $(TARGET_STATIC) $(OBJECTS_STATIC)
+
+"""
+
+template_tail = """
+
+.PHONY: clean cleanobj
+
+install :
+	# Development Libs
+	$(CP) $(TARGET_SHARED) $(PREFIX)/lib/
+	$(CP) $(TARGET_STATIC) $(PREFIX)/lib/
+
+uninstall :
+	# Development Libs
+	$(RM) $(PREFIX)/lib/$(TARGET_SHARED)
+	$(RM) $(PREFIX)/lib/$(TARGET_STATIC)
+
+clean :
+	$(RM) $(OBJECTS_TEST)
+	$(RM) $(OBJECTS_BIG_INT)
+	$(RM) $(TARGET_TEST)
+	$(RM) $(TARGET_SHARED)
+	$(RM) $(TARGET_STATIC)
+
+cleanobj :
+	$(RM) $(OBJECTS_TEST)
+	$(RM) $(OBJECTS_BIG_INT)
+
+"""
+
+def exec_output(cmdline):
+    p = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = p.stdout.read()
+    return output
+
+if __name__ == '__main__':
+    D = ""
+    if platform.system() == "Windows":
+        D += "-DWINDOWS"
+    elif platform.system() == "Linux":
+        D += "-DUNIX"
+
+    f = open(Makefile_pathname, "w")
+    f.write(template_head)
+    list_of_dir= os.listdir("./")
+    for item in list_of_dir:
+        if os.path.isfile(item):
+            if item.endswith('.c'):
+                basename = item[0:len(item) - 2]
+                f.write((exec_output("gcc -MM " + item + " " + D)) + "\n")
+                f.write("\t@echo \"Building " + item + "\"" + "\n")
+                f.write("\t@" + BUILD_PREFIX + "-o " + basename + ".o -c " + item + "\n")
+                f.write("\n")
+    f.write(template_tail)
+    f.close()
+
