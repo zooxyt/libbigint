@@ -42,7 +42,7 @@ $ make static # for building the static library
 $ make shared # for building the shared (dynamic) library
 ```
 
-LICENSE
+License
 -------
 BSD 3
 
